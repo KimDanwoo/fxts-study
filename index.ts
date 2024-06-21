@@ -102,15 +102,30 @@ class FxIterator<T> {
   constructor(public iterable: Iterable<T>) {}
 
   chunk(size: number) {
-    return new FxIterator(chunk(size, this.iterable))
+    return fx(chunk(size, this.iterable))
   }
 
   map<U>(f: (a: T) => U): FxIterator<U> {
-    return new FxIterator(map(f, this.iterable))
+    return fx(map(f, this.iterable))
+  }
+
+  to<U>(f: (iterable: Iterable<T>) => U) {
+    return f(this.iterable)
   }
 }
 
-async function concurrent3<T>(limit: number, fs: (() => Promise<T>)[]) {}
+function fx<T>(iterable: Iterable<T>) {
+  return new FxIterator(iterable)
+}
+
+async function concurrent3<T>(limit: number, fs: (() => Promise<T>)[]) {
+  return await fx(fs)
+    .chunk(limit)
+    .map((fs) => fs.map((f) => f()))
+    .map((ps) => Promise.all(ps))
+    .to(formAsync)
+    .then((arr) => arr.flat())
+}
 
 /**
  * @return {Promise<FileProps[]>}
@@ -119,7 +134,7 @@ async function concurrent3<T>(limit: number, fs: (() => Promise<T>)[]) {}
  * 여러개의 서비스를 동시에 호출하고 모두 끝난 결과를 받아올때 사용할 수 있다.
  */
 async function main() {
-  const files = await concurrent2(3, [
+  const files = await concurrent3(3, [
     () => getFile('file1.png'),
     () => getFile('file2.png'),
     () => getFile('file3.png'),
